@@ -1,0 +1,1 @@
+mkdir -p app/{core,api,models} scripts sql tests && touch .env .env.example requirements.txt app/__init__.py app/{core,api,models}/__init__.py app/core/{limiter.py,ledger.py} app/api/routes.py app/models/database.py scripts/{monitor.sh,load_test.py} sql/schema.sql
