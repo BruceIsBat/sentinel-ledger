@@ -399,7 +399,7 @@ We welcome research collaborations and implementations:
 
 **For academic collaborations or questions:**
 - Open an issue tagged `research-inquiry`
-- Email: [your contact]
+- Email: awoteduibrahim@gmail.com
 
 **For production deployment support:**
 - Open an issue tagged `production-support`
