@@ -374,7 +374,7 @@ If you use this system in research, please cite:
 
 ```bibtex
 @software{sentinel_ledger_2026,
-  author = {Awotedu Ibrahim},
+  author = {Awotedu, Ibrahim Keji},
   title = {Sentinel-Ledger: Concurrency Control in Rate-Limited Financial Systems},
   year = {2026},
   url = {https://github.com/BruceIsBat/sentinel-ledger}
