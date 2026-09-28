@@ -1,8 +1,20 @@
+import os
 from flask import Blueprint, request, jsonify
 from app.core.limiter import limiter
-from app.core.ledger import record_transaction
+from app.core.ledger import AtomicLedger
 
 api_bp = Blueprint('api', __name__)
+
+# Configure DB connection parameters for AtomicLedger from environment or defaults
+db_config = {
+    "host": os.environ.get("DB_HOST", "localhost"),
+    "user": os.environ.get("DB_USER", "root"),
+    "password": os.environ.get("DB_PASSWORD", ""),
+    "database": os.environ.get("DB_NAME", "sentinel_ledger"),
+    "port": int(os.environ.get("DB_PORT", 3306))
+}
+ledger = AtomicLedger(db_config)
+
 
 @api_bp.route('/transaction', methods=['POST'])
 def process_transaction():
@@ -19,45 +31,60 @@ def process_transaction():
             "retry_after_seconds": round(retry_delay, 2)
         }), 429
 
-    # 2. Payload Validation (supports user_id or recipient_id)
+    # 2. Payload Validation
     data = request.get_json(silent=True)
-    if not data or 'amount' not in data:
+    if not data:
         return jsonify({
             "status": "error",
-            "message": "Invalid transaction payload. Missing amount."
+            "message": "Invalid or empty JSON payload."
         }), 400
 
-    user_id = data.get('user_id') or data.get('recipient_id')
-    if not user_id:
+    sender_id = data.get('sender_id') or data.get('user_id')
+    recipient_id = data.get('recipient_id')
+
+    if not sender_id or not recipient_id:
         return jsonify({
             "status": "error",
-            "message": "Missing account identifier (user_id or recipient_id)."
+            "message": "Missing account identifiers. Both sender_id (or user_id) and recipient_id are required."
         }), 400
 
     try:
-        amount = float(data.get('amount'))
-        description = data.get('description', 'Standard Ledger Settlement')
+        amount = float(data.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({
+            "status": "error",
+            "message": "Invalid transaction amount. Must be numeric."
+        }), 400
 
-        # 3. Execute ACID Transaction via Core Ledger Service
-        txn_result = record_transaction(user_id=user_id, amount=amount, description=description)
+    if amount <= 0:
+        return jsonify({
+            "status": "error",
+            "message": "Transaction amount must be strictly greater than zero."
+        }), 400
+
+    # 3. Execute ACID Transaction via Core AtomicLedger
+    try:
+        txn_result = ledger.transfer_funds(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            amount=amount
+        )
 
         return jsonify({
             "status": "success",
-            "transaction_id": txn_result.get("transaction_id"),
-            "user_id": user_id,
-            "new_balance": txn_result.get("balance"),
+            "data": txn_result,
             "message": "Transaction committed successfully under ACID guarantees."
         }), 200
 
     except ValueError as ve:
-        # Business logic validation errors (e.g., negative amount, insufficient funds)
+        # Handles domain errors like insufficient balance, account not found, or identical accounts
         return jsonify({
             "status": "error",
             "message": str(ve)
         }), 422
 
     except Exception as e:
-        # Transaction abort / rollback safe state
+        # Aborted/rolled-back transaction
         return jsonify({
             "status": "error",
             "message": "Transaction aborted. Database state preserved.",
